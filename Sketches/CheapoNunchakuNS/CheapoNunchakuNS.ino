@@ -57,10 +57,7 @@ unsigned long toggleStartTime = 0;
 bool toggleInProgress = false;
 
 bool ltToggled = false;
-bool rtToggled = false;
-bool l3Toggled = false;
-bool r3Toggled = false;
-
+bool altmode = false;
 
 void setupPins() {
   // Attach and set debounce intervals for Bounce objects
@@ -73,6 +70,8 @@ void setupPins() {
 void setup() {
   ReportData.RX = 128;
   ReportData.RY = 128;
+  ReportData.LX = 128;
+  ReportData.LY = 128;
 
   Serial1.begin(9600);
   nunchuk.begin();
@@ -80,6 +79,15 @@ void setup() {
     Serial1.println("Nunchuk not detected!");
     delay(1000);
   }
+
+  nunchuk.update();  // Ensure the nunchuk state is updated
+  int clickStateC = nunchuk.buttonC();
+  if (clickStateC == 1) {
+    altmode = true;
+  } else {
+    altmode = false;
+  }
+
   setupPins();
   SetupHardware();
   GlobalInterruptEnable();
@@ -95,14 +103,7 @@ void loop() {
     return;
   }
 
-  handleAccel1(nunchuk.accelY());
-  handleAccel2(nunchuk.accelX());
-  handleAccel3(nunchuk.accelY(), nunchuk.joyY(), nunchuk.buttonC(), nunchuk.buttonZ());
-//  handleAccel4(nunchuk.accelY(), nunchuk.joyY(), nunchuk.buttonC(), nunchuk.buttonZ());
-  handleAccel5(nunchuk.accelX(), nunchuk.joyX(), nunchuk.buttonC(), nunchuk.buttonZ());
-//  handleAccel6(nunchuk.accelX(), nunchuk.joyX(), nunchuk.buttonC(), nunchuk.buttonZ());
-
-
+  handleAccel(nunchuk.accelY(), nunchuk.accelX(), nunchuk.buttonC(), nunchuk.buttonZ());
 
   int sensorValueY = nunchuk.joyY();
   int sensorValueX = nunchuk.joyX();  // 0 - 255
@@ -114,7 +115,7 @@ void loop() {
     if (!toggleInProgress) {
       toggleStartTime = millis();
       toggleInProgress = true;
-    } else if (millis() - toggleStartTime >= 1500) {
+    } else if (millis() - toggleStartTime >= 4000) {
       toggleMode();
       toggleInProgress = false;
     }
@@ -138,22 +139,24 @@ void toggleMode() {
     TXLED0;  // Turn on LED in DPAD_MODE
   }
 }
-
 void updateButtonStatus(int sensorValueY, int sensorValueX, int clickStateC, int clickStateZ) {
-  if (state == ANALOG_MODE) {
-    buttonStatus[0] = (sensorValueY > 142 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONUP
-    buttonStatus[1] = (sensorValueY < 114 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONDOWN
-    buttonStatus[5] = (sensorValueX > 142 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONRIGHT
-    buttonStatus[4] = (sensorValueX < 114 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONLEFT
-  } else {                                                                                // DPAD_MODE
-    buttonStatus[6] = (sensorValueY > 142 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONUP
-    buttonStatus[7] = (sensorValueY < 114 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONDOWN
-    buttonStatus[9] = (sensorValueX > 142 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONRIGHT
-    buttonStatus[8] = (sensorValueX < 114 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONLEFT
+  if (state == ANALOG_MODE && altmode == false && clickStateC == 0 && clickStateZ == 0) {
+    ReportData.RX = sensorValueX;
+    ReportData.RY = 255 - sensorValueY;  // Invert the Y-axis value
+  } else if (state == ANALOG_MODE && altmode == true && clickStateC == 0 && clickStateZ == 0) {
+    ReportData.LX = sensorValueX;
+    ReportData.LY = 255 - sensorValueY;  // Invert the Y-axis value
+  } else {
+    ReportData.RX = 128;
+    ReportData.RY = 128;  // DPAD_MODE
+    buttonStatus[6] = (sensorValueY > 192 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONUP
+    buttonStatus[7] = (sensorValueY < 64 && !clickStateC && !clickStateZ) ? HIGH : LOW;   // BUTTONDOWN
+    buttonStatus[9] = (sensorValueX > 192 && !clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONRIGHT
+    buttonStatus[8] = (sensorValueX < 64 && !clickStateC && !clickStateZ) ? HIGH : LOW;   // BUTTONLEFT
   }
 
   // Toggle LT
-  if (sensorValueY > 142 && clickStateZ && !clickStateC) {
+  if (sensorValueY > 192 && clickStateZ && !clickStateC) {
     if (!ltToggled) {
       ltToggled = true;
       buttonStatus[20] = !buttonStatus[20];  // Toggle BUTTONLT
@@ -161,204 +164,56 @@ void updateButtonStatus(int sensorValueY, int sensorValueX, int clickStateC, int
   } else {
     ltToggled = false;
   }
+  buttonStatus[17] = (sensorValueX < 64 && clickStateC && !clickStateZ) ? HIGH : LOW;   // BUTTONY
+  buttonStatus[16] = (sensorValueY > 192 && clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONX
+  buttonStatus[14] = (sensorValueX > 192 && clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONY
+  buttonStatus[15] = (sensorValueY < 64 && clickStateC && !clickStateZ) ? HIGH : LOW;   // BUTTONX
 
-  // Toggle RT
-  if (sensorValueY < 114 && clickStateZ && !clickStateC) {
-    if (!rtToggled) {
-      rtToggled = true;
-      buttonStatus[21] = !buttonStatus[21];  // Toggle BUTTONRT
-    }
-  } else {
-    rtToggled = false;
-  }
+  buttonStatus[19] = (sensorValueX > 192 && clickStateZ && !clickStateC) ? HIGH : LOW;  // BUTTONRB
+  buttonStatus[18] = (sensorValueX < 64 && clickStateZ && !clickStateC) ? HIGH : LOW;   // BUTTONLB
+  buttonStatus[21] = (sensorValueY < 64 && clickStateZ && !clickStateC) ? HIGH : LOW;   // BUTTONRT
 
-  if (sensorValueX > 142 && clickStateZ && clickStateC) {
-    if (!l3Toggled) {
-      l3Toggled = true;
-      buttonStatus[25] = !buttonStatus[25];  // Toggle BUTTONL3
-    }
-  } else {
-    l3Toggled = false;
-  }
-
-  // Toggle RT
-  if (sensorValueX < 114 && clickStateZ && clickStateC) {
-    if (!r3Toggled) {
-      r3Toggled = true;
-      buttonStatus[26] = !buttonStatus[26];  // Toggle BUTTONR3
-    }
-  } else {
-    r3Toggled = false;
-  }
-  buttonStatus[17] = (sensorValueX < 114 && clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONY
-  buttonStatus[16] = (sensorValueY > 142 && clickStateC && !clickStateZ) ? HIGH : LOW;  // BUTTONX
-  buttonStatus[19] = (sensorValueX > 142 && clickStateZ && !clickStateC) ? HIGH : LOW;  // BUTTONRB
-  buttonStatus[18] = (sensorValueX < 114 && clickStateZ && !clickStateC) ? HIGH : LOW;  // BUTTONLB
-  buttonStatus[22] = (sensorValueY > 142 && clickStateZ && clickStateC) ? HIGH : LOW;  // BUTTONSTART
-  buttonStatus[23] = (sensorValueY < 114 && clickStateZ && clickStateC) ? HIGH : LOW;  // BUTTONSELECT
+  buttonStatus[22] = (sensorValueY > 192 && clickStateZ && clickStateC) ? HIGH : LOW;  // BUTTONSTART
+  buttonStatus[23] = (sensorValueY < 64 && clickStateZ && clickStateC) ? HIGH : LOW;   // BUTTONSELECT
+  buttonStatus[25] = (sensorValueX > 192 && clickStateZ && clickStateC) ? HIGH : LOW;  // BUTTONL3
+  buttonStatus[26] = (sensorValueX < 64 && clickStateZ && clickStateC) ? HIGH : LOW;   // BUTTONR3
 }
 
-#define DEADZONE 100         // Define the size of the deadzone
-#define SMOOTHING_WINDOW 25  // Number of samples for moving average
-uint16_t accelYValues[SMOOTHING_WINDOW] = { 0 };
-uint16_t accelXValues[SMOOTHING_WINDOW] = { 0 };
-uint8_t index = 0;
+void handleAccel(uint16_t aY, uint16_t aX, uint16_t clickStateC, uint16_t clickStateZ) {
+  if (clickStateC == 0 || clickStateZ == 0) {
+    const uint16_t accel3Threshold = 400;  // Controller pointed up
+    const uint16_t accel4Threshold = 600;  // Controller pointed up
 
-void handleAccel1(uint16_t aY) {
-  accelYValues[index] = aY;
-  uint32_t sum = 0;
-  for (int i = 0; i < SMOOTHING_WINDOW; i++) {
-    sum += accelYValues[i];
-  }
-  uint16_t smoothedY = sum / SMOOTHING_WINDOW;
+    const uint8_t countThreshold = 6;  // Arbitrary limit to filter noise
 
-  if (abs(smoothedY - 512) < DEADZONE) {
-    ReportData.RY = 128;  // Center value
-  } else {
-    ReportData.RY = map(smoothedY, 256, 768, 0, 255);
-  }
-}
+    static uint8_t ax1Count = 0;
+    static uint8_t ax2Count = 0;
 
-void handleAccel3(uint16_t aY, int sensorValueY, int clickStateC, int clickStateZ) {
-  const uint16_t flickRangeLow3 = 225;           // Adjusted lower bound of flick range
-  const uint16_t flickRangeHigh3 = 350;          // Adjusted upper bound of flick range
-  const unsigned long flickDurationLimit = 250;  // 500 milliseconds
-  static unsigned long flickStartTime = 0;       // To track the start time of the flick
-
-  // Check if the value falls within the flick range after being below the threshold
-  if (aY >= flickRangeLow3 && aY <= flickRangeHigh3) {
-    if (flickStartTime == 0) {  // If flick just started
-      flickStartTime = millis();
-    }
-    if (millis() - flickStartTime < flickDurationLimit) {
-      buttonStatus[15] = HIGH;  // Press Button15 if within flick range for less than 500 ms
+    if ((aY <= accel3Threshold && altmode == false) || (aY >= accel4Threshold && altmode == false)) {
+      ReportData.LY = map(aY, 256, 768, 0, 255);
     } else {
-      buttonStatus[15] = LOW;  // Release Button15 if exceeding 500 ms
+      ReportData.LY = 128;
     }
-  } else {
-    flickStartTime = 0;      // Reset flick start time if outside the flick range
-    buttonStatus[15] = LOW;  // Release Button15
-  }
-
-  // Additional condition for sensor value and click state
-  if (sensorValueY < 114 && clickStateC && !clickStateZ) {
-    buttonStatus[15] = HIGH;
-  }
-}
-
-void handleAccel4(uint16_t aY, int sensorValueY, int clickStateC, int clickStateZ) {
-  const uint16_t flickRangeLow4 = 256;   // Adjusted lower bound of flick range
-  const uint16_t flickRangeHigh4 = 356;  // Adjusted upper bound of flick range
-
-  // Check if the value falls within the flick range after being below the threshold
-  if (aY >= flickRangeLow4 && aY <= flickRangeHigh4) {
-    buttonStatus[16] = HIGH;  // Press Button15
-  } else {
-    buttonStatus[16] = LOW;  // Release Button15
-  }
-
-  // Additional condition for sensor value and click state
-  if (sensorValueY > 142 && clickStateC && !clickStateZ) {
-    buttonStatus[16] = HIGH;
-  }
-}
-
-void handleAccel5(uint16_t aX, int sensorValueX, int clickStateC, int clickStateZ) {
-  const uint16_t flickRangeLow5 = 725;           // Adjusted lower bound of flick range
-  const uint16_t flickRangeHigh5 = 850;          // Adjusted upper bound of flick range
-  const unsigned long flickDurationLimit = 250;  // 500 milliseconds
-  static unsigned long flickStartTime = 0;       // To track the start time of the flick
-
-  // Check if the value falls within the flick range after being below the threshold
-  if (aX >= flickRangeLow5 && aX <= flickRangeHigh5) {
-    if (flickStartTime == 0) {  // If flick just started
-      flickStartTime = millis();
-    }
-    if (millis() - flickStartTime < flickDurationLimit) {
-      buttonStatus[14] = HIGH;  // Press Button15 if within flick range for less than 500 ms
+    if ((aX <= accel3Threshold && altmode == false) || (aX >= accel4Threshold && altmode == false)) {
+      ReportData.LX = map(aX, 200, 800, 0, 255);
     } else {
-      buttonStatus[14] = LOW;  // Release Button15 if exceeding 500 ms
+      ReportData.LX = 128;
     }
-  } else {
-    flickStartTime = 0;      // Reset flick start time if outside the flick range
-    buttonStatus[14] = LOW;  // Release Button15
+    if ((aY <= accel3Threshold && altmode == true) || (aY >= accel4Threshold && altmode == true)) {
+      ReportData.RY = map(aY, 256, 768, 0, 255);
+    } else {
+      ReportData.RY = 128;
+    }
+    if ((aX <= accel3Threshold && altmode == true) || (aX >= accel4Threshold && altmode == true)) {
+      ReportData.RX = map(aX, 200, 800, 0, 255);
+    } else {
+      ReportData.RX = 128;
+    }
   }
-
-  // Additional condition for sensor value and click state
-  if (sensorValueX > 142 && clickStateC && !clickStateZ) {
-    buttonStatus[14] = HIGH;
-  }
-}
-
-void handleAccel6(uint16_t aX, int sensorValueX, int clickStateC, int clickStateZ) {
-  const uint16_t flickRangeLow6 = 256;   // Adjusted lower bound of flick range
-  const uint16_t flickRangeHigh6 = 356;  // Adjusted upper bound of flick range
-
-  // Check if the value falls within the flick range after being below the threshold
-  if (aX >= flickRangeLow6 && aX <= flickRangeHigh6) {
-    buttonStatus[17] = HIGH;  // Press Button15
-  } else {
-    buttonStatus[17] = LOW;  // Release Button15
-  }
-
-  // Additional condition for sensor value and click state
-  if (sensorValueX < 114 && clickStateC && !clickStateZ) {
-    buttonStatus[17] = HIGH;
-  }
-}
-
-
-void handleAccel2(uint16_t aX) {
-  accelXValues[index] = aX;
-  uint32_t sum = 0;
-  for (int i = 0; i < SMOOTHING_WINDOW; i++) {
-    sum += accelXValues[i];
-  }
-  uint16_t smoothedX = sum / SMOOTHING_WINDOW;
-
-  if (abs(smoothedX - 512) < DEADZONE) {
-    ReportData.RX = 128;  // Center value
-  } else {
-    ReportData.RX = map(smoothedX, 256, 768, 0, 255);
-  }
-
-  index = (index + 1) % SMOOTHING_WINDOW;
 }
 
 void processLANALOG() {
   ReportData.HAT = DPAD_NOTHING_MASK_ON;
-  processAnalogStick();
-}
-
-void processAnalogStick() {
-  if (buttonStatus[0] && buttonStatus[5]) {  // BUTTONUP & BUTTONRIGHT
-    ReportData.LY = 0;
-    ReportData.LX = 255;
-  } else if (buttonStatus[1] && buttonStatus[5]) {  // BUTTONDOWN & BUTTONRIGHT
-    ReportData.LY = 255;
-    ReportData.LX = 255;
-  } else if (buttonStatus[1] && buttonStatus[4]) {  // BUTTONDOWN & BUTTONLEFT
-    ReportData.LY = 255;
-    ReportData.LX = 0;
-  } else if (buttonStatus[0] && buttonStatus[4]) {  // BUTTONUP & BUTTONLEFT
-    ReportData.LY = 0;
-    ReportData.LX = 0;
-  } else if (buttonStatus[0]) {  // BUTTONUP
-    ReportData.LY = 0;
-    ReportData.LX = 128;
-  } else if (buttonStatus[1]) {  // BUTTONDOWN
-    ReportData.LY = 255;
-    ReportData.LX = 128;
-  } else if (buttonStatus[4]) {  // BUTTONLEFT
-    ReportData.LX = 0;
-    ReportData.LY = 128;
-  } else if (buttonStatus[5]) {  // BUTTONRIGHT
-    ReportData.LX = 255;
-    ReportData.LY = 128;
-  } else {
-    ReportData.LX = 128;
-    ReportData.LY = 128;
-  }
 }
 
 void processDPad() {

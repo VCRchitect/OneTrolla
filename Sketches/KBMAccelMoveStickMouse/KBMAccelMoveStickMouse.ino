@@ -16,6 +16,9 @@ const int accelDeadzone2 = 80;   // Deadzone for Vertical values (downward tilt)
 const float accelFactor = 0.05;  // Adjust this value to control sensitivity
 const float exponentialFactor = 1.5; // Exponential factor for mouse movement
 
+bool altmode = false;
+
+
 void setup() {
   Serial.begin(9600);
   Keyboard.begin();
@@ -25,6 +28,15 @@ void setup() {
     Serial.println("Nunchuk not detected!");
     delay(1000);
   }
+  
+  nunchuk.update();  // Ensure the nunchuk state is updated
+  int clickStateC = nunchuk.buttonC();
+  if (clickStateC == 1) {
+    altmode = true;
+  } else {
+    altmode = false;
+  }
+
 }
 
 void loop() {
