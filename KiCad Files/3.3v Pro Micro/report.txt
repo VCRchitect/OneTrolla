@@ -1,0 +1,11 @@
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-F_Cu.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-B_Cu.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-F_Paste.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-B_Paste.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-F_Silkscreen.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-B_Silkscreen.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-F_Mask.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-B_Mask.gbr'.
+Plotted to 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-Edge_Cuts.gbr'.
+Created Gerber job file 'C:\Users\User\Desktop\Custom Duino\3.3v Pro Micro-job.gbrjob'.
+Info: Done.

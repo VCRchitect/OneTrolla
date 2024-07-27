@@ -68,6 +68,7 @@ void setupPins() {
 }
 
 void setup() {
+  TXLED1;
   ReportData.RX = 128;
   ReportData.RY = 128;
   ReportData.LX = 128;
