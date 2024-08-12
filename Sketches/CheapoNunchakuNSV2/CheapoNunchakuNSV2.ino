@@ -56,6 +56,8 @@ const int accelNegThreshold = 350;  // Increase sensitivity by lowering threshol
 unsigned long toggleStartTime = 0;
 bool toggleInProgress = false;
 
+
+
 bool ltToggled = false;
 bool altmode = false;
 
@@ -73,7 +75,8 @@ void setup() {
   ReportData.RY = 128;
   ReportData.LX = 128;
   ReportData.LY = 128;
-
+  pinMode(1, INPUT_PULLUP);
+  pinMode(0, INPUT_PULLUP);
   Serial1.begin(9600);
   nunchuk.begin();
   while (!nunchuk.connect()) {
@@ -82,10 +85,10 @@ void setup() {
   }
 
   nunchuk.update();  // Ensure the nunchuk state is updated
-  int clickStateC = nunchuk.buttonC();
-  if (clickStateC == 1) {
+  if (digitalRead(0 == LOW)) {
     altmode = true;
-  } else {
+  }
+  if (digitalRead(1 == LOW)) {
     altmode = false;
   }
 
@@ -104,6 +107,13 @@ void loop() {
     return;
   }
 
+  if (digitalRead(0 == LOW)) {
+    altmode = true;
+  }
+  if (digitalRead(1 == LOW)) {
+    altmode = false;
+  }
+
   handleAccel(nunchuk.accelY(), nunchuk.accelX(), nunchuk.buttonC(), nunchuk.buttonZ());
 
   int sensorValueY = nunchuk.joyY();
@@ -116,7 +126,7 @@ void loop() {
     if (!toggleInProgress) {
       toggleStartTime = millis();
       toggleInProgress = true;
-    } else if (millis() - toggleStartTime >= 4000) {
+    } else if (millis() - toggleStartTime >= 3000) {
       toggleMode();
       toggleInProgress = false;
     }
