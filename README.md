@@ -3,7 +3,7 @@ This is not something I intend to sell for more than $20, and that will likely i
 
 I don't know if this can replace some of the more-expensive controllers that are out there, but it is an inexpensive option and it will still open up a ton of games to those that may not have been able to experience them before.
 
-In order to cover as many games as possible, I have provided a couple of control schemes. Whether using the Switch version or the PC version, while connecting the USB, hold the C button to enter the alternate mode.
+In order to cover as many games as possible, I have provided a couple of control schemes, depending on the direction of the toggle on the circuit board.
 
 For the Nintendo Switch version, here are the mappings:
 
@@ -25,14 +25,14 @@ For the Nintendo Switch version, here are the mappings:
    - Left = L3
    - Right = R3
 
- - Hold just C & Z for 4 seconds:
-   - toggle between the analog stick and DPad for the joystick on the nunchuck
+ - Hold just C & Z for 3 seconds:
+   - toggle between the analog stick and DPad mode
 
- - If C wasn't held during USB connection:
+-Set the toggle on the board to down:
     - Joystick = Right Analog Stick
     - Accelerometer = Left Analog Stick
   
- - If C was held during USB connection:
+-Set the toggle on the board to up:
     - Joystick = Left Analog Stick
     - Acclerometer = Right Analog Stick  
 
