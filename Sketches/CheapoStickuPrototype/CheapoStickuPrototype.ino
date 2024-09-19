@@ -15,9 +15,7 @@
 MPU6050 mpu;           // Create an instance of the MPU6050
 bool altmode = false;  // Define the altmode variable
 
-bool buttonStartBefore;
-bool buttonSelectBefore;
-byte buttonStatus[15];
+byte buttonStatus[7];  // Adjusted size to match the number of buttons
 
 // Define masks for the various button states
 #define DPAD_NOTHING_MASK_ON 0x08
@@ -42,13 +40,25 @@ byte buttonStatus[15];
 #define START_MASK_ON 0x200
 #define SELECT_MASK_ON 0x100
 
+// Button indices for buttonStatus array
 #define BUTTON1 0
 #define BUTTON2 1
 #define BUTTON3 2
 #define BUTTON4 3
-#define BUTTON5 15
-#define SHIFT1 4
-#define SHIFT2 5
+#define BUTTON5 4
+#define SHIFT1 5
+#define SHIFT2 6
+
+// Define pins for buttons and shifts
+#define PIN_BUTTON1 4
+#define PIN_BUTTON2 7
+#define PIN_BUTTON3 9
+#define PIN_BUTTON4 5
+#define PIN_BUTTON5 15
+#define PIN_SHIFT1 6
+#define PIN_SHIFT2 8
+#define PIN_ALT_MODE_0 0
+#define PIN_ALT_MODE_1 1
 
 Bounce button1 = Bounce();
 Bounce button2 = Bounce();
@@ -59,14 +69,13 @@ Bounce shift1 = Bounce();
 Bounce shift2 = Bounce();
 
 void setupPins() {
-  button1.attach(4, INPUT_PULLUP);
-  button2.attach(7, INPUT_PULLUP);
-  button3.attach(9, INPUT_PULLUP);
-  button4.attach(5, INPUT_PULLUP);
-  button5.attach(15, INPUT_PULLUP);
-  shift1.attach(6, INPUT_PULLUP);
-  shift2.attach(8, INPUT_PULLUP);
-
+  button1.attach(PIN_BUTTON1, INPUT_PULLUP);
+  button2.attach(PIN_BUTTON2, INPUT_PULLUP);
+  button3.attach(PIN_BUTTON3, INPUT_PULLUP);
+  button4.attach(PIN_BUTTON4, INPUT_PULLUP);
+  button5.attach(PIN_BUTTON5, INPUT_PULLUP);
+  shift1.attach(PIN_SHIFT1, INPUT_PULLUP);
+  shift2.attach(PIN_SHIFT2, INPUT_PULLUP);
 
   button1.interval(MILLIDEBOUNCE);
   button2.interval(MILLIDEBOUNCE);
@@ -77,14 +86,12 @@ void setupPins() {
   shift2.interval(MILLIDEBOUNCE);
 
   pinMode(pinOBLED, OUTPUT);
-  pinMode(0, INPUT_PULLUP);  // Set pin 0 for altmode
-  pinMode(1, INPUT_PULLUP);  // Set pin 1 for altmode
+  pinMode(PIN_ALT_MODE_0, INPUT_PULLUP);  // Set pin for altmode
+  pinMode(PIN_ALT_MODE_1, INPUT_PULLUP);  // Set pin for altmode
   digitalWrite(pinOBLED, HIGH);
 }
 
 void setup() {
-  buttonStartBefore = false;
-  buttonSelectBefore = false;
   setupPins();
 
   // Initialize MPU6050
@@ -106,10 +113,9 @@ void setup() {
 
 void loop() {
   // Check altmode status
-  if (digitalRead(0) == LOW) {
+  if (digitalRead(PIN_ALT_MODE_0) == LOW) {
     altmode = true;
-  }
-  if (digitalRead(1) == LOW) {
+  } else if (digitalRead(PIN_ALT_MODE_1) == LOW) {
     altmode = false;
   }
 
@@ -130,17 +136,17 @@ void readAnalogStick() {
   int yValue = analogRead(joyY);
 
   // Apply deadzone to xValue
-  if (abs(xValue - 512) < deadzone) { // Assuming 512 is the center value for the analog stick
-    xValue = 512; // Set to neutral position
+  if (abs(xValue - 512) < deadzone) {  // Assuming 512 is the center value for the analog stick
+    xValue = 512;                      // Set to neutral position
   }
 
   // Apply deadzone to yValue
-  if (abs(yValue - 512) < deadzone) { // Assuming 512 is the center value for the analog stick
-    yValue = 512; // Set to neutral position
+  if (abs(yValue - 512) < deadzone) {  // Assuming 512 is the center value for the analog stick
+    yValue = 512;                      // Set to neutral position
   }
 
-  // Check if button5 is pressed
-  if (button5.read() == LOW) {  // If button5 is pressed
+  // Check if BUTTON5 is pressed
+  if (buttonStatus[BUTTON5] == LOW) {  // If BUTTON5 is pressed
     // Map analog stick values to DPAD with inverted left/right
     if (xValue < 341) {    // Now this is Right
       if (yValue < 341) {  // Up-Right
@@ -167,6 +173,17 @@ void readAnalogStick() {
         ReportData.HAT = DPAD_NOTHING_MASK_ON;
       }
     }
+
+    // Center the specified joystick axes based on altmode
+    if (altmode) {
+      // If altmode is true, center LX and LY
+      ReportData.LX = 128;
+      ReportData.LY = 128;
+    } else {
+      // If altmode is false, center RX and RY
+      ReportData.RX = 128;
+      ReportData.RY = 128;
+    }
   } else {
     ReportData.HAT = DPAD_NOTHING_MASK_ON;
 
@@ -191,14 +208,9 @@ void readMPU6050() {
   // Define deadzone threshold
   const int16_t deadzoneThreshold = 9500;
 
-  // Example: Adjust for 90-degree rotation around the Y-axis
-  // Adjust the axes as follows:
-  //   - X-axis (ax) -> new X-axis (az)
-  //   - Z-axis (az) -> new inverted Y-axis (-ax)
-  // Swapping and adjusting signs based on the new orientation.
 
   int16_t adjustedX = ax;  // New X-axis becomes the previous Z-axis
-  int16_t adjustedY = az;  // New Y-axis becomes the inverted X-axis
+  int16_t adjustedY = az;  // New Y-axis becomes the Z-axis
 
   // Map the accelerometer values to joystick range (0-255) with deadzone
   if (altmode) {
@@ -230,7 +242,6 @@ void readMPU6050() {
   }
 }
 
-
 void readButtons() {
   // Update the button states with debouncing
   button1.update();
@@ -247,7 +258,6 @@ void readButtons() {
   buttonStatus[BUTTON3] = button3.read();
   buttonStatus[BUTTON4] = button4.read();
   buttonStatus[BUTTON5] = button5.read();
-
   buttonStatus[SHIFT1] = shift1.read();
   buttonStatus[SHIFT2] = shift2.read();
 }
