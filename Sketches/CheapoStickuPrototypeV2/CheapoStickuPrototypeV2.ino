@@ -54,8 +54,8 @@ byte buttonStatus[7];  // Adjusted size to match the number of buttons
 #define PIN_BUTTON2 7
 #define PIN_BUTTON3 9
 #define PIN_BUTTON4 5
-#define PIN_BUTTON5 15
-#define PIN_SHIFT1 6
+#define PIN_BUTTON5 6
+#define PIN_SHIFT1 15
 #define PIN_SHIFT2 8
 #define PIN_ALT_MODE_0 0
 #define PIN_ALT_MODE_1 1
@@ -206,36 +206,46 @@ void readMPU6050() {
   mpu.getAcceleration(&ax, &ay, &az);
 
   // Define deadzone threshold
-  const int16_t deadzoneThreshold = 9500;
+  const int16_t deadzoneThreshold = 6500;
 
+  int16_t adjustedX = ax;  // Adjusted X-axis
+  int16_t adjustedY = az;  // Adjusted Y-axis
 
-  int16_t adjustedX = ax;  // New X-axis becomes the previous Z-axis
-  int16_t adjustedY = az;  // New Y-axis becomes the Z-axis
+  // Initialize static variables for smoothing
+  static float smoothedX = adjustedX;
+  static float smoothedY = adjustedY;
+  
+  // Smoothing factor (alpha), between 0 (no smoothing) and 1 (maximum smoothing)
+  const float alpha = 0.1; // You can adjust this value as needed
 
-  // Map the accelerometer values to joystick range (0-255) with deadzone
+  // Apply exponential smoothing
+  smoothedX = alpha * adjustedX + (1 - alpha) * smoothedX;
+  smoothedY = alpha * adjustedY + (1 - alpha) * smoothedY;
+
+  // Map the smoothed accelerometer values to joystick range (0-255) with deadzone
   if (altmode) {
     // Control right stick (RX, RY) when altmode is true
-    if (abs(adjustedX) > deadzoneThreshold) {
-      ReportData.RX = map(constrain(adjustedX, -17000, 17000), -17000, 17000, 0, 255);
+    if (abs(smoothedX) > deadzoneThreshold) {
+      ReportData.RX = map(constrain((int32_t)smoothedX, -17000, 17000), -17000, 17000, 0, 255);
     } else {
       ReportData.RX = 128;  // Center position in the deadzone
     }
 
-    if (abs(adjustedY) > deadzoneThreshold) {
-      ReportData.RY = map(constrain(adjustedY, -17000, 17000), -17000, 17000, 0, 255);
+    if (abs(smoothedY) > deadzoneThreshold) {
+      ReportData.RY = map(constrain((int32_t)smoothedY, -17000, 17000), -17000, 17000, 0, 255);
     } else {
       ReportData.RY = 128;  // Center position in the deadzone
     }
   } else {
     // Control left stick (LX, LY) when altmode is false
-    if (abs(adjustedX) > deadzoneThreshold) {
-      ReportData.LX = map(constrain(adjustedX, -17000, 17000), -17000, 17000, 0, 255);
+    if (abs(smoothedX) > deadzoneThreshold) {
+      ReportData.LX = map(constrain((int32_t)smoothedX, -10000, 10000), -10000, 10000, 0, 255);
     } else {
       ReportData.LX = 128;  // Center position in the deadzone
     }
 
-    if (abs(adjustedY) > deadzoneThreshold) {
-      ReportData.LY = map(constrain(adjustedY, -17000, 17000), -17000, 17000, 0, 255);
+    if (abs(smoothedY) > deadzoneThreshold) {
+      ReportData.LY = map(constrain((int32_t)smoothedY, -10000, 13000), -10000, 13000, 0, 255);
     } else {
       ReportData.LY = 128;  // Center position in the deadzone
     }
