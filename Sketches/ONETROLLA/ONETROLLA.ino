@@ -21,32 +21,30 @@ bool altmode = false;  // Global altmode variable
 // When false, buttons L, A, and Y use toggle logic;
 // when true, a held press sends the alternate (momentary) output.
 bool homeheld = false;
-bool homeheldToggleHandled = false; // Prevent multiple toggles per long press
+bool homeheldToggleHandled = false;  // Prevent multiple toggles per long press
 
 // --- Update button indices and array sizes ---
-// We now have BUTTON1-5, SHIFT1-2, BUTTON6 (HOME), BUTTON7 (toggle altmode)
-#define BUTTON1 0   // A button (normal: sends A; long press toggles L3)
-#define BUTTON2 1   // B button (long press sends SELECT)
-#define BUTTON3 2   // X button (long press sends START)
-#define BUTTON4 3   // Y button (normal: sends Y; long press toggles R3)
-#define BUTTON5 4   // Used for DPAD mode (unchanged)
-#define SHIFT1 5    // L button (normal: short sends LB; long press toggles ZL)
-#define SHIFT2 6    // (long press sends ZR)
-#define BUTTON6 7   // HOME button (short press sends HOME; long press toggles homeheld)
-#define BUTTON7 8   // Button7 toggles alt mode
+#define BUTTON1 0  // A button (normal: sends A; long press toggles L3)
+#define BUTTON2 1  // B button (long press sends SELECT)
+#define BUTTON3 2  // X button (long press sends START)
+#define BUTTON4 3  // Y button (normal: sends Y; long press toggles R3)
+#define BUTTON5 4  // Used for DPAD mode (unchanged)
+#define SHIFT1 5   // L button (short press toggles ZL, long press = LB)
+#define SHIFT2 6   // R button (short press toggles ZR, long press = RB)
+#define BUTTON6 7  // HOME button (short press = HOME, long press toggles homeheld)
+#define BUTTON7 8  // Button7 toggles altmode
 
 byte buttonStatus[9];  // Now 9 entries
 
-// --- Button state machine indices (for buttons using it) ---
-// We use a state machine for BUTTON1-4, SHIFT1-2, BUTTON6, BUTTON7
+// --- Button state machine indices ---
 #define BUTTON_SM_1 0  // For A button (L3 toggle in default mode)
 #define BUTTON_SM_2 1  // For B button (long press = SELECT)
 #define BUTTON_SM_3 2  // For X button (long press = START)
 #define BUTTON_SM_4 3  // For Y button (R3 toggle in default mode)
-#define SHIFT_SM_1 4   // For SHIFT1 (L button: toggles ZL in default mode)
-#define SHIFT_SM_2 5   // For SHIFT2 (long press = ZR)
+#define SHIFT_SM_1 4   // For SHIFT1 (L button)
+#define SHIFT_SM_2 5   // For SHIFT2 (R button)
 #define BUTTON_SM_6 6  // For HOME button
-#define BUTTON_SM_7 7  // For alt mode toggle (unchanged)
+#define BUTTON_SM_7 7  // For altmode toggle
 
 // --- Button mask definitions ---
 #define DPAD_NOTHING_MASK_ON 0x08
@@ -73,17 +71,15 @@ byte buttonStatus[9];  // Now 9 entries
 #define HOME_MASK_ON 0x1000
 
 // --- Define pins for buttons and shifts ---
-// (Updated for your custom board)
 #define PIN_BUTTON1 16
 #define PIN_BUTTON2 10
 #define PIN_BUTTON3 9
 #define PIN_BUTTON4 7
 #define PIN_BUTTON5 15
 #define PIN_BUTTON6 5
-#define PIN_BUTTON7 4  // New button for toggling altmode
+#define PIN_BUTTON7 4
 #define PIN_SHIFT1 6
 #define PIN_SHIFT2 8
-// The physical switch pins for accelerometer control:
 #define PIN_ALT_MODE_0 0  // When low: force active stick axes to neutral (128)
 #define PIN_ALT_MODE_1 1  // When low: accelerometer functions normally
 
@@ -95,30 +91,39 @@ Bounce button4 = Bounce();
 Bounce button5 = Bounce();
 Bounce shift1 = Bounce();
 Bounce shift2 = Bounce();
-Bounce button6 = Bounce();  // For HOME
-Bounce button7 = Bounce();  // For toggling altmode
+Bounce button6 = Bounce();
+Bounce button7 = Bounce();
 
 // --- State machine definitions ---
-enum ButtonState { BUTTON_IDLE,
-                   BUTTON_PRESSED,
-                   BUTTON_LONG_PRESSED };
-ButtonState buttonStates[8] = { BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE,
-                                BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE };
+enum ButtonState {
+  BUTTON_IDLE,
+  BUTTON_PRESSED,
+  BUTTON_LONG_PRESSED
+};
+ButtonState buttonStates[8] = {
+  BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE,
+  BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE, BUTTON_IDLE
+};
 
-enum ButtonAction { ACTION_NONE,
-                    ACTION_SHORT_PRESS,
-                    ACTION_SHORT_PRESS_HOLDING,
-                    ACTION_SHORT_RELEASE };
-ButtonAction actionNeeded[8] = { ACTION_NONE, ACTION_NONE, ACTION_NONE, ACTION_NONE,
-                                 ACTION_NONE, ACTION_NONE, ACTION_NONE, ACTION_NONE };
+enum ButtonAction {
+  ACTION_NONE,
+  ACTION_SHORT_PRESS,
+  ACTION_SHORT_PRESS_HOLDING,
+  ACTION_SHORT_RELEASE
+};
+ButtonAction actionNeeded[8] = {
+  ACTION_NONE, ACTION_NONE, ACTION_NONE, ACTION_NONE,
+  ACTION_NONE, ACTION_NONE, ACTION_NONE, ACTION_NONE
+};
 
-unsigned long buttonPressStartTime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-unsigned long pressStartTime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+unsigned long buttonPressStartTime[8] = { 0,0,0,0,0,0,0,0 };
+unsigned long pressStartTime[8]       = { 0,0,0,0,0,0,0,0 };
 
 // --- Variables for toggle logic (default mode) ---
-// For SHIFT1 (L) toggling ZL, BUTTON1 (A) toggling L3, and BUTTON4 (Y) toggling R3.
 bool shift1ZLToggle = false;
 bool shift1ToggleHandled = false;
+bool shift2ZRToggle = false;       // <-- New toggle variable for ZR
+bool shift2ToggleHandled = false;  // <-- Helper to avoid repeated toggles
 bool aToggle = false;
 bool aToggleHandled = false;
 bool yToggle = false;
@@ -146,10 +151,9 @@ void setupPins() {
   button7.interval(MILLIDEBOUNCE);
 
   pinMode(pinOBLED, OUTPUT);
-  // Initialize LED to off (homeheld false)
   digitalWrite(pinOBLED, LOW);
 
-  // Set up the accelerometer control pins for pullup:
+  // Set up the accelerometer control pins
   pinMode(PIN_ALT_MODE_0, INPUT_PULLUP);
   pinMode(PIN_ALT_MODE_1, INPUT_PULLUP);
 }
@@ -157,12 +161,9 @@ void setupPins() {
 void setup() {
   setupPins();
 
-  // Initialize MPU6050
   Wire.begin();
   mpu.initialize();
-
   if (!mpu.testConnection()) {
-    // Connection failed; blink onboard LED to indicate error
     while (true) {
       digitalWrite(pinOBLED, !digitalRead(pinOBLED));
       delay(500);
@@ -175,7 +176,7 @@ void setup() {
 
 void loop() {
   readAnalogStick();
-  readMPU6050();  // Read and process accelerometer data
+  readMPU6050();
   readButtons();
   processButtons();
   HID_Task();
@@ -190,7 +191,9 @@ void readAnalogStick() {
   if (abs(xValue - 512) < deadzone) xValue = 512;
   if (abs(yValue - 512) < deadzone) yValue = 512;
 
-  if (buttonStatus[BUTTON5] == LOW) {  // If BUTTON5 is pressed, use DPAD mapping
+  // DPAD mode if button5 is pressed
+  if (buttonStatus[BUTTON5] == LOW) {
+    // Map analog to DPAD
     if (xValue < 341) {
       if (yValue < 341) ReportData.HAT = DPAD_UPRIGHT_MASK_ON;
       else if (yValue > 682) ReportData.HAT = DPAD_DOWNRIGHT_MASK_ON;
@@ -204,7 +207,7 @@ void readAnalogStick() {
       else if (yValue > 682) ReportData.HAT = DPAD_DOWN_MASK_ON;
       else ReportData.HAT = DPAD_NOTHING_MASK_ON;
     }
-    // In DPAD mode, force the active stick to neutral:
+    // In DPAD mode, force whichever stick is active to neutral
     if (altmode) {
       ReportData.LX = 128;
       ReportData.LY = 128;
@@ -213,6 +216,7 @@ void readAnalogStick() {
       ReportData.RY = 128;
     }
   } else {
+    // Normal analog mode
     ReportData.HAT = DPAD_NOTHING_MASK_ON;
     if (altmode) {
       ReportData.LX = map(xValue, 0, 1023, 255, 0);
@@ -225,7 +229,7 @@ void readAnalogStick() {
 }
 
 void readMPU6050() {
-  // If PIN_ALT_MODE_0 is low, force stick axes to neutral:
+  // If PIN_ALT_MODE_0 is low, force stick axes to neutral
   if (digitalRead(PIN_ALT_MODE_0) == LOW) {
     if (altmode || buttonStatus[BUTTON5] == LOW) {
       ReportData.RX = 128;
@@ -236,33 +240,44 @@ void readMPU6050() {
     }
     return;
   }
+
   int16_t ax, ay, az;
   mpu.getAcceleration(&ax, &ay, &az);
 
-  const int16_t deadzoneThreshold = 6500;
+  const int16_t deadzoneThreshold = 9001;
+  const int16_t deadzoneThreshold2 = 9000;
   int16_t adjustedX = -ay;
   int16_t adjustedY = -az;
 
-  static float smoothedX = adjustedX;
-  static float smoothedY = adjustedY;
+  static float smoothedX = 0;
+  static float smoothedY = 0;
   const float alpha = 0.1;
+
+  // Initialize smoothing if first time
+  if (smoothedX == 0 && smoothedY == 0) {
+    smoothedX = adjustedX;
+    smoothedY = adjustedY;
+  }
+
   smoothedX = alpha * adjustedX + (1 - alpha) * smoothedX;
   smoothedY = alpha * adjustedY + (1 - alpha) * smoothedY;
 
   if (altmode || buttonStatus[BUTTON5] == LOW) {
+    // A bit bigger range for Right stick
     ReportData.RX = (abs(smoothedX) > deadzoneThreshold)
-                      ? map(constrain((int32_t)smoothedX, -17000, 17000), -17000, 17000, 0, 255)
-                      : 128;
+      ? map(constrain((int32_t)smoothedX, -10000, 10000), -10000, 10000, 0, 255)
+      : 128;
     ReportData.RY = (abs(smoothedY) > deadzoneThreshold)
-                      ? map(constrain((int32_t)smoothedY, -17000, 17000), -17000, 17000, 0, 255)
-                      : 128;
+      ? map(constrain((int32_t)smoothedY, -10000, 10000), -10000, 10000, 0, 255)
+      : 128;
   } else {
-    ReportData.LX = (abs(smoothedX) > deadzoneThreshold)
-                      ? map(constrain((int32_t)smoothedX, -10000, 10000), -10000, 10000, 0, 255)
-                      : 128;
-    ReportData.LY = (abs(smoothedY) > deadzoneThreshold)
-                      ? map(constrain((int32_t)smoothedY, -10000, 10000), -10000, 10000, 0, 255)
-                      : 128;
+    // Slightly narrower range for Left stick
+    ReportData.LX = (abs(smoothedX) > deadzoneThreshold2)
+      ? map(constrain((int32_t)smoothedX, -8000, 8000), -8000, 8000, 0, 255)
+      : 128;
+    ReportData.LY = (abs(smoothedY) > deadzoneThreshold2)
+      ? map(constrain((int32_t)smoothedY, -6000, 6000), -6000, 6000, 0, 255)
+      : 128;
   }
 }
 
@@ -287,7 +302,7 @@ void readButtons() {
   buttonStatus[BUTTON6] = button6.read();
   buttonStatus[BUTTON7] = button7.read();
 
-  // Run state machine for BUTTON1-4, SHIFT1-2, BUTTON6, BUTTON7
+  // Update state machines for relevant buttons
   handleButtonPress(button1, BUTTON_SM_1);
   handleButtonPress(button2, BUTTON_SM_2);
   handleButtonPress(button3, BUTTON_SM_3);
@@ -306,17 +321,22 @@ void handleButtonPress(Bounce &button, int idx) {
         buttonStates[idx] = BUTTON_PRESSED;
       }
       break;
+
     case BUTTON_PRESSED:
       if (button.read() == LOW) {
-        if (millis() - buttonPressStartTime[idx] >= 500) {  // Long press threshold
+        // Check if we've reached the long-press threshold
+        if (millis() - buttonPressStartTime[idx] >= 500) {
           buttonStates[idx] = BUTTON_LONG_PRESSED;
         }
       } else if (button.rose()) {
+        // It was a short press
         buttonStates[idx] = BUTTON_IDLE;
         actionNeeded[idx] = ACTION_SHORT_PRESS;
       }
       break;
+
     case BUTTON_LONG_PRESSED:
+      // Once in long-press state, remain until button is released
       if (button.read() == HIGH) {
         buttonStates[idx] = BUTTON_IDLE;
       }
@@ -325,15 +345,15 @@ void handleButtonPress(Bounce &button, int idx) {
 }
 
 void processButtons() {
-  // Clear button report
+  // Clear previous button states
   ReportData.Button = 0;
 
   // Process each button state machine
   for (int i = BUTTON_SM_1; i <= BUTTON_SM_7; i++) {
-    // BUTTON_SM_1: A button (affects L3 / A)
+    // BUTTON_SM_1: A button (toggles L3 in default mode)
     if (i == BUTTON_SM_1) {
       if (!homeheld) {
-        // Default mode: long press toggles L3; short press sends A.
+        // Default mode: long press toggles L3; short press => A
         if (buttonStates[BUTTON_SM_1] == BUTTON_LONG_PRESSED) {
           if (!aToggleHandled) {
             aToggle = !aToggle;
@@ -353,11 +373,11 @@ void processButtons() {
             actionNeeded[BUTTON_SM_1] = ACTION_NONE;
           }
         }
-      } else { // homeheld true: momentary alternate function when held
+      } else {
+        // homeheld: long press => momentary L3, short press => A
         if (buttonStates[BUTTON_SM_1] == BUTTON_LONG_PRESSED) {
-          ReportData.Button |= L3_MASK_ON;  // Held -> send L3 momentarily
+          ReportData.Button |= L3_MASK_ON;
         } else {
-          // Short press -> send A as normal
           if (actionNeeded[BUTTON_SM_1] == ACTION_SHORT_PRESS) {
             ReportData.Button |= A_MASK_ON;
             pressStartTime[BUTTON_SM_1] = millis();
@@ -372,7 +392,7 @@ void processButtons() {
         }
       }
     }
-    // BUTTON_SM_2: B button (unchanged)
+    // BUTTON_SM_2: B button
     else if (i == BUTTON_SM_2) {
       if (buttonStates[BUTTON_SM_2] == BUTTON_LONG_PRESSED) {
         ReportData.Button |= SELECT_MASK_ON;
@@ -388,7 +408,7 @@ void processButtons() {
         actionNeeded[BUTTON_SM_2] = ACTION_NONE;
       }
     }
-    // BUTTON_SM_3: X button (unchanged)
+    // BUTTON_SM_3: X button
     else if (i == BUTTON_SM_3) {
       if (buttonStates[BUTTON_SM_3] == BUTTON_LONG_PRESSED) {
         ReportData.Button |= START_MASK_ON;
@@ -404,10 +424,9 @@ void processButtons() {
         actionNeeded[BUTTON_SM_3] = ACTION_NONE;
       }
     }
-    // BUTTON_SM_4: Y button (affects R3 / Y)
+    // BUTTON_SM_4: Y button (toggles R3 in default mode)
     else if (i == BUTTON_SM_4) {
       if (!homeheld) {
-        // Default mode: long press toggles R3; short press sends Y.
         if (buttonStates[BUTTON_SM_4] == BUTTON_LONG_PRESSED) {
           if (!yToggleHandled) {
             yToggle = !yToggle;
@@ -427,11 +446,11 @@ void processButtons() {
             actionNeeded[BUTTON_SM_4] = ACTION_NONE;
           }
         }
-      } else { // homeheld true: momentary alternate function when held
+      } else {
+        // homeheld: long press => momentary R3, short press => Y
         if (buttonStates[BUTTON_SM_4] == BUTTON_LONG_PRESSED) {
-          ReportData.Button |= R3_MASK_ON;  // Held -> send R3 momentarily
+          ReportData.Button |= R3_MASK_ON;
         } else {
-          // Short press -> send Y as normal
           if (actionNeeded[BUTTON_SM_4] == ACTION_SHORT_PRESS) {
             ReportData.Button |= Y_MASK_ON;
             pressStartTime[BUTTON_SM_4] = millis();
@@ -446,72 +465,89 @@ void processButtons() {
         }
       }
     }
-    // SHIFT_SM_1: L button (affects ZL / LB)
+    // SHIFT_SM_1: L button (toggles ZL in default mode)
     else if (i == SHIFT_SM_1) {
       if (!homeheld) {
-        // Default mode: long press toggles ZL; short press sends LB.
+        // Default mode: short press => toggle ZL, long press => LB
         if (buttonStates[SHIFT_SM_1] == BUTTON_LONG_PRESSED) {
-          if (!shift1ToggleHandled) {
-            shift1ZLToggle = !shift1ZLToggle;
-            shift1ToggleHandled = true;
-          }
+          ReportData.Button |= LB_MASK_ON;
         } else {
-          shift1ToggleHandled = false;
+          // short press => toggle ZL
           if (actionNeeded[SHIFT_SM_1] == ACTION_SHORT_PRESS) {
-            ReportData.Button |= LB_MASK_ON;
-            pressStartTime[SHIFT_SM_1] = millis();
-            actionNeeded[SHIFT_SM_1] = ACTION_SHORT_PRESS_HOLDING;
-          } else if (actionNeeded[SHIFT_SM_1] == ACTION_SHORT_PRESS_HOLDING) {
-            ReportData.Button |= LB_MASK_ON;
-            if (millis() - pressStartTime[SHIFT_SM_1] >= 255)
-              actionNeeded[SHIFT_SM_1] = ACTION_SHORT_RELEASE;
-          } else if (actionNeeded[SHIFT_SM_1] == ACTION_SHORT_RELEASE) {
+            if (!shift1ToggleHandled) {
+              shift1ZLToggle = !shift1ZLToggle;
+              shift1ToggleHandled = true;
+            }
             actionNeeded[SHIFT_SM_1] = ACTION_NONE;
+          } else if (buttonStates[SHIFT_SM_1] == BUTTON_IDLE) {
+            shift1ToggleHandled = false;
           }
         }
-      } else { // homeheld true: momentary alternate function when held
+      } else {
+        // Homeheld: short press => momentary ZL, long press => LB
         if (buttonStates[SHIFT_SM_1] == BUTTON_LONG_PRESSED) {
-          ReportData.Button |= ZL_MASK_ON;  // Held -> send ZL momentarily
+          ReportData.Button |= LB_MASK_ON;
         } else {
-          // Short press sends LB as normal.
           if (actionNeeded[SHIFT_SM_1] == ACTION_SHORT_PRESS) {
-            ReportData.Button |= LB_MASK_ON;
+            ReportData.Button |= ZL_MASK_ON;
             pressStartTime[SHIFT_SM_1] = millis();
             actionNeeded[SHIFT_SM_1] = ACTION_SHORT_PRESS_HOLDING;
           } else if (actionNeeded[SHIFT_SM_1] == ACTION_SHORT_PRESS_HOLDING) {
-            ReportData.Button |= LB_MASK_ON;
-            if (millis() - pressStartTime[SHIFT_SM_1] >= 255)
+            ReportData.Button |= ZL_MASK_ON;
+            if (millis() - pressStartTime[SHIFT_SM_1] >= 255) {
               actionNeeded[SHIFT_SM_1] = ACTION_SHORT_RELEASE;
+            }
           } else if (actionNeeded[SHIFT_SM_1] == ACTION_SHORT_RELEASE) {
             actionNeeded[SHIFT_SM_1] = ACTION_NONE;
           }
         }
       }
     }
-    // SHIFT_SM_2: (ZR / RB) remains unchanged.
+    // SHIFT_SM_2: R button (toggles ZR in default mode)
     else if (i == SHIFT_SM_2) {
-      if (buttonStates[SHIFT_SM_2] == BUTTON_LONG_PRESSED) {
-        ReportData.Button |= ZR_MASK_ON;
-      } else if (actionNeeded[SHIFT_SM_2] == ACTION_SHORT_PRESS) {
-        ReportData.Button |= RB_MASK_ON;
-        pressStartTime[SHIFT_SM_2] = millis();
-        actionNeeded[SHIFT_SM_2] = ACTION_SHORT_PRESS_HOLDING;
-      } else if (actionNeeded[SHIFT_SM_2] == ACTION_SHORT_PRESS_HOLDING) {
-        ReportData.Button |= RB_MASK_ON;
-        if (millis() - pressStartTime[SHIFT_SM_2] >= 255)
-          actionNeeded[SHIFT_SM_2] = ACTION_SHORT_RELEASE;
-      } else if (actionNeeded[SHIFT_SM_2] == ACTION_SHORT_RELEASE) {
-        actionNeeded[SHIFT_SM_2] = ACTION_NONE;
+      if (!homeheld) {
+        // Default mode: short press => toggle ZR, long press => RB
+        if (buttonStates[SHIFT_SM_2] == BUTTON_LONG_PRESSED) {
+          ReportData.Button |= RB_MASK_ON;
+        } else {
+          // short press => toggle ZR
+          if (actionNeeded[SHIFT_SM_2] == ACTION_SHORT_PRESS) {
+            if (!shift2ToggleHandled) {
+              shift2ZRToggle = !shift2ZRToggle;
+              shift2ToggleHandled = true;
+            }
+            actionNeeded[SHIFT_SM_2] = ACTION_NONE;
+          } else if (buttonStates[SHIFT_SM_2] == BUTTON_IDLE) {
+            shift2ToggleHandled = false;
+          }
+        }
+      } else {
+        // Homeheld: short press => momentary ZR, long press => RB
+        if (buttonStates[SHIFT_SM_2] == BUTTON_LONG_PRESSED) {
+          ReportData.Button |= RB_MASK_ON;
+        } else {
+          if (actionNeeded[SHIFT_SM_2] == ACTION_SHORT_PRESS) {
+            ReportData.Button |= ZR_MASK_ON;
+            pressStartTime[SHIFT_SM_2] = millis();
+            actionNeeded[SHIFT_SM_2] = ACTION_SHORT_PRESS_HOLDING;
+          } else if (actionNeeded[SHIFT_SM_2] == ACTION_SHORT_PRESS_HOLDING) {
+            ReportData.Button |= ZR_MASK_ON;
+            if (millis() - pressStartTime[SHIFT_SM_2] >= 255) {
+              actionNeeded[SHIFT_SM_2] = ACTION_SHORT_RELEASE;
+            }
+          } else if (actionNeeded[SHIFT_SM_2] == ACTION_SHORT_RELEASE) {
+            actionNeeded[SHIFT_SM_2] = ACTION_NONE;
+          }
+        }
       }
     }
-    // BUTTON_SM_6: HOME button – short press sends HOME; long press toggles homeheld.
+    // BUTTON_SM_6: HOME button (short press = HOME, long press toggles homeheld)
     else if (i == BUTTON_SM_6) {
       if (buttonStates[BUTTON_SM_6] == BUTTON_LONG_PRESSED) {
         if (!homeheldToggleHandled) {
           homeheld = !homeheld;
           homeheldToggleHandled = true;
         }
-        // Do NOT send HOME signal on long press.
       } else {
         homeheldToggleHandled = false;
         if (actionNeeded[BUTTON_SM_6] == ACTION_SHORT_PRESS) {
@@ -527,7 +563,7 @@ void processButtons() {
         }
       }
     }
-    // BUTTON_SM_7: Alt mode toggle (unchanged)
+    // BUTTON_SM_7: Altmode toggle
     else if (i == BUTTON_SM_7) {
       if (actionNeeded[BUTTON_SM_7] == ACTION_SHORT_PRESS) {
         altmode = !altmode;
@@ -542,13 +578,14 @@ void processButtons() {
     }
   }
 
-  // In default mode, enforce persistent toggles.
+  // In default mode, we apply persistent toggles for ZL, ZR, L3, and R3
   if (!homeheld) {
     if (shift1ZLToggle) ReportData.Button |= ZL_MASK_ON;
-    if (aToggle)      ReportData.Button |= L3_MASK_ON;
-    if (yToggle)      ReportData.Button |= R3_MASK_ON;
+    if (shift2ZRToggle) ReportData.Button |= ZR_MASK_ON;
+    if (aToggle)        ReportData.Button |= L3_MASK_ON;
+    if (yToggle)        ReportData.Button |= R3_MASK_ON;
   }
 
-  // Visual cue: set onboard LED HIGH when homeheld is true, LOW otherwise.
+  // Show homeheld status on onboard LED
   digitalWrite(pinOBLED, homeheld ? HIGH : LOW);
 }
